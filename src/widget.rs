@@ -4,6 +4,7 @@ use crate::ratatui::text::Text;
 use crate::ratatui::widgets::{Paragraph, Widget};
 use crate::textarea::TextArea;
 use crate::util::num_digits;
+use ansi_to_tui::IntoText;
 use std::cmp;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -86,13 +87,36 @@ impl<'a> Renderer<'a> {
     #[inline]
     fn text(&self, top_row: usize, height: usize) -> Text<'a> {
         let lines_len = self.0.lines().len();
-        let lnum_len = num_digits(lines_len);
-        let bottom_row = cmp::min(top_row + height, lines_len);
-        let mut lines = Vec::with_capacity(bottom_row - top_row);
-        for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
-            lines.push(self.0.line_spans(line.as_str(), top_row + i, lnum_len));
-        }
-        Text::from(lines)
+        // let lnum_len = num_digits(lines_len);
+        // let bottom_row = cmp::min(top_row + height, lines_len);
+        let height = cmp::min(height, lines_len - top_row);
+        // let mut lines = Vec::with_capacity(bottom_row - top_row);
+        // for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
+        //     lines.push(self.0.line_spans(line.as_str(), top_row + i, lnum_len));
+        // }
+        // Text::from(lines)
+        // for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
+        //     lines.push(line.into_text().unwrap())
+        // }
+        let string = self
+            .0
+            .lines()
+            .iter()
+            .skip(top_row)
+            .take(height)
+            .collect::<Vec<&String>>();
+
+        let binding = string
+            .into_iter()
+            .flat_map(|s| {
+                let mut bytes = s.as_bytes().to_vec();
+                bytes.push(b'\n');
+                bytes
+            })
+            .collect::<Vec<u8>>();
+        let bytes = binding.as_slice();
+
+        bytes.into_text().unwrap()
     }
 }
 

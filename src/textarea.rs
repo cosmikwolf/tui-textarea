@@ -18,6 +18,44 @@ use std::cmp::Ordering;
 use tui::text::Spans as Line;
 use unicode_width::UnicodeWidthChar as _;
 
+#[macro_export]
+macro_rules! trace_dbg {
+    (target: $target:expr, level: $level:expr, $ex:expr) => {{
+        //let value = $ex;
+        //let formatted = format!("{:?}", value).replace("\\n", "\n");
+        match $ex {
+            value => {
+                //tracing::event!(target: $target, $level, ?value, ?formatted);
+                tracing::event!(target: $target, $level, %value, stringify!($ex));
+                //tracing::event!(target: $target, $level, ?value, stringify!($ex));
+                value
+            }
+        }
+    }};
+    (level: $level:expr, $ex:expr) => {
+        trace_dbg!(target: module_path!(), level: $level, $ex)
+    };
+    (target: $target:expr, $ex:expr) => {
+        trace_dbg!(target: $target, level: tracing::Level::DEBUG, $ex)
+    };
+    ($ex:expr) => {
+        trace_dbg!(level: tracing::Level::DEBUG, $ex)
+    };
+
+    // make trace_dbg compatible with formatted text
+    ($($arg:tt)*) => {
+        //let value = $($arg)*;
+        //let res = format!(value);
+        let res = format!($($arg)*);
+        trace_dbg!(level: tracing::Level::DEBUG, res)
+    };
+    // make trace_dbg compatible with formatted text, with level
+    (level: $level:expr, $($arg:tt)*) => {
+        let res = format!($($arg)*);
+        trace_dbg!(level: $level, res)
+    };
+}
+
 #[derive(Debug, Clone)]
 enum YankText {
     Piece(String),
@@ -748,6 +786,34 @@ impl<'a> TextArea<'a> {
             Pos::new(row, col, i),
             i + c.len_utf8(),
         );
+    }
+
+    /// #todo add documentation
+    pub fn replace_at_end<S: AsRef<str>>(&mut self, s: S, chars: usize) {
+        let mut chars_to_remove = chars;
+
+        while let Some(line) = self.lines.last_mut() {
+            if chars_to_remove == 0 {
+                break;
+            }
+
+            if line.len() < chars_to_remove {
+                // If the entire line (plus a potential newline character) is to be removed
+                chars_to_remove = chars_to_remove.saturating_sub(line.len() + 1); // Adjust for the newline character if necessary
+                self.lines.pop(); // Remove the last line
+            } else {
+                let new_len = line.len() - chars_to_remove;
+                line.truncate(new_len);
+                break;
+            }
+        }
+
+        let mut lines: Vec<String> = s.as_ref().split('\n').map(|s| s.to_string()).collect();
+        trace_dbg!("lines: {:#?}", lines);
+        if let Some(line) = self.lines.last_mut() {
+            line.push_str(&lines.remove(0));
+        }
+        self.lines.append(&mut lines);
     }
 
     /// Insert a string at current cursor position. This method returns if some text was inserted or not in the textarea.
