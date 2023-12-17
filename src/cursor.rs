@@ -234,6 +234,9 @@ impl CursorMove {
     ) -> Option<(usize, usize)> {
         use CursorMove::*;
 
+        #[cfg(feature = "ansi-escapes")]
+        let lines = crate::util::as_plain_text(lines);
+
         fn fit_col(col: usize, line: &str) -> usize {
             cmp::min(col, line.chars().count())
         }

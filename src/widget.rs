@@ -1,10 +1,11 @@
+use crate::highlight::LineHighlighter;
 use crate::ratatui::buffer::Buffer;
 use crate::ratatui::layout::Rect;
 use crate::ratatui::text::Text;
 use crate::ratatui::widgets::{Paragraph, Widget};
 use crate::textarea::TextArea;
 use crate::util::num_digits;
-use ansi_to_tui::IntoText;
+
 use std::cmp;
 use std::sync::atomic::{AtomicU64, Ordering};
 
@@ -84,44 +85,30 @@ impl<'a> Renderer<'a> {
         Self(textarea)
     }
 
+    #[cfg(not(feature = "ansi-escapes"))]
     #[inline]
     fn text(&self, top_row: usize, height: usize) -> Text<'a> {
         let lines_len = self.0.lines().len();
-        // let lnum_len = num_digits(lines_len);
-        // let bottom_row = cmp::min(top_row + height, lines_len);
-        let height = cmp::min(height, lines_len - top_row);
-        // let mut lines = Vec::with_capacity(bottom_row - top_row);
-        // for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
-        //     lines.push(self.0.line_spans(line.as_str(), top_row + i, lnum_len));
-        // }
-        // Text::from(lines)
-        // for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
-        //     lines.push(line.into_text().unwrap())
-        // }
-        let string = self
-            .0
-            .lines()
-            .iter()
-            .skip(top_row)
-            .take(height)
-            .collect::<Vec<&String>>();
+        let lnum_len = num_digits(lines_len);
+        let bottom_row = cmp::min(top_row + height, lines_len);
+        let mut lines = Vec::with_capacity(bottom_row - top_row);
+        for (i, line) in self.0.lines()[top_row..bottom_row].iter().enumerate() {
+            lines.push(self.0.line_spans(line.as_str(), top_row + i, lnum_len));
+        }
+        Text::from(lines)
+    }
 
-        let binding = string
-            .into_iter()
-            .flat_map(|s| {
-                let mut bytes = s.as_bytes().to_vec();
-                bytes.push(b'\n');
-                bytes
-            })
-            .collect::<Vec<u8>>();
-        let bytes = binding.as_slice();
-
-        bytes.into_text().unwrap()
+    #[cfg(feature = "ansi-escapes")]
+    #[inline]
+    fn text(&self, top_row: usize, height: usize) -> Text<'a> {
+        use ansi_to_tui::IntoText;
+        self.0.as_highlighted(top_row, height).into_text().unwrap()
     }
 }
 
 impl<'a> Widget for Renderer<'a> {
     fn render(self, area: Rect, buf: &mut Buffer) {
+        use ratatui::style::Style;
         let Rect { width, height, .. } = if let Some(b) = self.0.block() {
             b.inner(area)
         } else {
@@ -143,12 +130,14 @@ impl<'a> Widget for Renderer<'a> {
         let top_row = next_scroll_top(top_row, cursor.0 as u16, height);
         let top_col = next_scroll_top(top_col, cursor.1 as u16, width);
 
-        let (text, style) = if !self.0.placeholder.is_empty() && self.0.is_empty() {
-            let text = Text::from(self.0.placeholder.as_str());
-            (text, self.0.placeholder_style)
-        } else {
-            (self.text(top_row as usize, height as usize), self.0.style())
-        };
+        let (text, style): (Text<'_>, Style) =
+            if !self.0.placeholder.is_empty() && self.0.is_empty() {
+                let text = Text::from(self.0.placeholder.as_str());
+                (text, self.0.placeholder_style)
+            } else {
+                let text = self.text(top_row as usize, height as usize);
+                (text, self.0.style())
+            };
 
         // To get fine control over the text color and the surrrounding block they have to be rendered separately
         // see https://github.com/ratatui-org/ratatui/issues/144

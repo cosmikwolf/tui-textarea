@@ -1,3 +1,5 @@
+#[cfg(feature = "ansi-escapes")]
+use crate::bat_renderer::BatRenderer;
 use crate::cursor::CursorMove;
 use crate::highlight::LineHighlighter;
 use crate::history::{Edit, EditKind, History};
@@ -11,50 +13,15 @@ use crate::search::Search;
 use crate::util::{spaces, Pos};
 use crate::widget::{Renderer, Viewport};
 use crate::word::{find_word_end_forward, find_word_start_backward};
+
 #[cfg(feature = "ratatui")]
 use ratatui::text::Line;
+#[cfg(feature = "ansi-escapes")]
+use ratatui::text::Text;
 use std::cmp::Ordering;
 #[cfg(feature = "tuirs")]
 use tui::text::Spans as Line;
 use unicode_width::UnicodeWidthChar as _;
-
-#[macro_export]
-macro_rules! trace_dbg {
-    (target: $target:expr, level: $level:expr, $ex:expr) => {{
-        //let value = $ex;
-        //let formatted = format!("{:?}", value).replace("\\n", "\n");
-        match $ex {
-            value => {
-                //tracing::event!(target: $target, $level, ?value, ?formatted);
-                tracing::event!(target: $target, $level, %value, stringify!($ex));
-                //tracing::event!(target: $target, $level, ?value, stringify!($ex));
-                value
-            }
-        }
-    }};
-    (level: $level:expr, $ex:expr) => {
-        trace_dbg!(target: module_path!(), level: $level, $ex)
-    };
-    (target: $target:expr, $ex:expr) => {
-        trace_dbg!(target: $target, level: tracing::Level::DEBUG, $ex)
-    };
-    ($ex:expr) => {
-        trace_dbg!(level: tracing::Level::DEBUG, $ex)
-    };
-
-    // make trace_dbg compatible with formatted text
-    ($($arg:tt)*) => {
-        //let value = $($arg)*;
-        //let res = format!(value);
-        let res = format!($($arg)*);
-        trace_dbg!(level: tracing::Level::DEBUG, res)
-    };
-    // make trace_dbg compatible with formatted text, with level
-    (level: $level:expr, $($arg:tt)*) => {
-        let res = format!($($arg)*);
-        trace_dbg!(level: $level, res)
-    };
-}
 
 #[derive(Debug, Clone)]
 enum YankText {
@@ -128,6 +95,8 @@ pub struct TextArea<'a> {
     yank: YankText,
     #[cfg(feature = "search")]
     search: Search,
+    #[cfg(feature = "ansi-escapes")]
+    bat_renderer: BatRenderer<'a>,
     alignment: Alignment,
     pub(crate) placeholder: String,
     pub(crate) placeholder_style: Style,
@@ -224,6 +193,8 @@ impl<'a> TextArea<'a> {
             style: Style::default(),
             cursor: (0, 0),
             tab_len: 4,
+            #[cfg(feature = "ansi-escapes")]
+            bat_renderer: BatRenderer::default(),
             hard_tab_indent: false,
             history: History::new(50),
             cursor_line_style: Style::default().add_modifier(Modifier::UNDERLINED),
@@ -809,7 +780,6 @@ impl<'a> TextArea<'a> {
         }
 
         let mut lines: Vec<String> = s.as_ref().split('\n').map(|s| s.to_string()).collect();
-        trace_dbg!("lines: {:#?}", lines);
         if let Some(line) = self.lines.last_mut() {
             line.push_str(&lines.remove(0));
         }
@@ -1623,6 +1593,7 @@ impl<'a> TextArea<'a> {
         }
     }
 
+    #[cfg(not(feature = "ansi-escapes"))]
     pub(crate) fn line_spans<'b>(&'b self, line: &'b str, row: usize, lnum_len: u8) -> Line<'b> {
         let mut hl = LineHighlighter::new(
             line,
@@ -1650,6 +1621,134 @@ impl<'a> TextArea<'a> {
         }
 
         hl.into_spans()
+    }
+
+    #[cfg(feature = "ansi-escapes")]
+    pub(crate) fn as_highlighted<'b>(&'b self, top_row: usize, height: usize) -> Vec<u8> {
+        use nu_ansi_term::Color;
+        use nu_ansi_term::Style;
+
+        use crate::util::bookend_ansi_escapes;
+        use crate::util::get_last_ansi_sequence;
+        use crate::util::plain_char_index_to_ansi_char_index;
+        use crate::util::to_plain_text;
+
+        let cursor_line = self.cursor().0.clamp(0, self.lines().len());
+
+        let reverse = Style::new().reverse();
+        let highlight = Style::new().on(Color::Fixed(240));
+
+        // if let Some((start, end)) = self.selection_range() {
+        //     hl.selection(row, start.row, start.offset, end.row, end.offset);
+        // }
+        let mut last_escape_code = String::new();
+        bookend_ansi_escapes(self.lines())
+            .into_iter()
+            .skip(top_row)
+            .take(height)
+            .enumerate()
+            .map(|(line_num, line_text)| {
+                if let Some(s) = get_last_ansi_sequence(&line_text) {
+                    last_escape_code = s;
+                };
+                match self.selection_range() {
+                    Some((start, end)) => {
+                        let start_index =
+                            plain_char_index_to_ansi_char_index(line_text.as_str(), start.offset);
+                        let end_index =
+                            plain_char_index_to_ansi_char_index(line_text.as_str(), end.offset);
+                        if start.row < line_num && line_num < end.row {
+                            format!("{}", highlight.paint(to_plain_text(&line_text)))
+                        } else if line_num == start.row {
+                            let before_cursor = &line_text[..start_index];
+                            let after_cursor = &line_text[start_index..];
+                            format!(
+                                "{}{}",
+                                before_cursor,
+                                highlight.paint(to_plain_text(after_cursor))
+                            )
+                        } else if line_num == end.row {
+                            let before_cursor = &line_text[..end_index];
+                            let after_cursor = &line_text[end_index..];
+                            format!(
+                                "{}{}{}",
+                                highlight.paint(to_plain_text(before_cursor)),
+                                last_escape_code,
+                                after_cursor
+                            )
+                        } else {
+                            line_text.to_string()
+                        }
+                    }
+                    None => {
+                        if line_num == cursor_line {
+                            if line_text.len() > 1 {
+                                let cursor_index = plain_char_index_to_ansi_char_index(
+                                    line_text.as_str(),
+                                    self.cursor().1,
+                                )
+                                .clamp(1, line_text.chars().count().max(1));
+                                let before_cursor = &line_text[..cursor_index];
+                                let cursor = &line_text
+                                    .chars()
+                                    .nth(cursor_index)
+                                    .unwrap_or('&')
+                                    .to_string();
+                                if cursor_index == line_text.len() {
+                                    format!("{}{}", before_cursor, reverse.paint(cursor))
+                                } else {
+                                    let after_cursor = &line_text[cursor_index + 1..];
+                                    format!(
+                                        "{}{}{}{}",
+                                        before_cursor,
+                                        reverse.paint(cursor),
+                                        last_escape_code,
+                                        after_cursor
+                                    )
+                                }
+                            } else {
+                                format!("{}", reverse.paint(" "))
+                            }
+                        } else {
+                            line_text.to_string()
+                        }
+                    }
+                }
+            })
+            .collect::<Vec<String>>()
+            .join("\n")
+            .as_bytes()
+            .to_vec()
+        //
+        // self.lines.iter_mut().enumerate().map(|(line_number, line_text)| {
+        //    if
+        // })
+        // let mut hl = LineHighlighter::new(
+        //     line,
+        //     self.cursor_style,
+        //     self.tab_len,
+        //     self.mask,
+        //     self.select_style,
+        // );
+        //
+        // if let Some(style) = self.line_number_style {
+        //     hl.line_number(row, lnum_len, style);
+        // }
+        //
+        // if row == self.cursor.0 {
+        //     hl.cursor_line(self.cursor.1, self.cursor_line_style);
+        // }
+        //
+        // #[cfg(feature = "search")]
+        // if let Some(matches) = self.search.matches(line) {
+        //     hl.search(matches, self.search.style);
+        // }
+        //
+        // if let Some((start, end)) = self.selection_range() {
+        //     hl.selection(row, start.row, start.offset, end.row, end.offset);
+        // }
+        //
+        // hl.into_spans()
     }
 
     /// Build a ratatui (or tui-rs) widget to render the current state of the textarea. The widget instance returned

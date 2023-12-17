@@ -15,9 +15,10 @@ readme = "README.md"
 categories = ["text-editors", "text-processing"]
 keywords = ["tui", "textarea", "editor", "input", "ratatui"]
 include = ["/src", "/examples", "/tests", "/README.md", "/LICENSE.txt"]
+resolver = "2"
 
 [features]
-default = ["crossterm"]
+default = ["crossterm", "ansi-escapes"]
 # Features to use ratatui
 ratatui = ["dep:ratatui"]
 crossterm = ["ratatui", "dep:crossterm", "ratatui/crossterm"]
@@ -31,9 +32,13 @@ tuirs-termion = ["tuirs", "dep:termion", "tui/termion"]
 tuirs-no-backend = ["tuirs"]
 # Other optional features
 search = ["dep:regex"]
+ansi-escapes = ["dep:ansi-to-tui", "dep:nu-ansi-term", "dep:bat"]
 
 [dependencies]
-ansi-to-tui = { version = "3.1.0" }
+ansi-to-tui = { version = "3.1.0", optional = true }
+nu-ansi-term = { version = "0.49", optional = true }
+bat = { version = "0.24.0", optional = true }
+
 tracing = "0.1.37"
 arbitrary = { version = "1", features = ["derive"], optional = true }
 crossterm = { package = "crossterm", version = "0.27", optional = true }
@@ -105,5 +110,5 @@ lto = "thin"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
-features = ["search", "crossterm", "termwiz", "termion"]
+features = ["search", "crossterm", "termwiz", "termion", "ansi-escapes"]
 rustdoc-args = ["--cfg", "docsrs"]
