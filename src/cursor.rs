@@ -241,7 +241,7 @@ impl CursorMove {
             cmp::min(col, line.chars().count())
         }
 
-        match self {
+        let cursor = match self {
             Forward if col >= lines[row].chars().count() => {
                 (row + 1 < lines.len()).then(|| (row + 1, 0))
             }
@@ -321,6 +321,16 @@ impl CursorMove {
 
                 Some((row, col))
             }
+        };
+
+        let (_vrow, vcol, vwidth, _vheight) = viewport.rect();
+        // the number of whitespace characters at the beginning of lines[row]
+        match cursor {
+            Some((row, col)) => Some((
+                row,
+                col.clamp(vcol as usize, vcol as usize + vwidth as usize),
+            )),
+            _ => None,
         }
     }
 }

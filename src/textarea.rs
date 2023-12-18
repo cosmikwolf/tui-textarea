@@ -1636,7 +1636,8 @@ impl<'a> TextArea<'a> {
         let cursor_line = self.cursor().0.clamp(0, self.lines().len());
 
         let reverse = Style::new().reverse();
-        let highlight = Style::new().on(Color::Fixed(240));
+        // let highlight = Style::new().fg(Color::Black).on(Color::Fixed(240));
+        let highlight = Style::new().reverse();
 
         // if let Some((start, end)) = self.selection_range() {
         //     hl.selection(row, start.row, start.offset, end.row, end.offset);
@@ -1653,13 +1654,13 @@ impl<'a> TextArea<'a> {
                 };
                 match self.selection_range() {
                     Some((start, end)) => {
-                        let start_index =
-                            plain_char_index_to_ansi_char_index(line_text.as_str(), start.offset);
-                        let end_index =
-                            plain_char_index_to_ansi_char_index(line_text.as_str(), end.offset);
                         if start.row < line_num && line_num < end.row {
                             format!("{}", highlight.paint(to_plain_text(&line_text)))
                         } else if line_num == start.row {
+                            let start_index = plain_char_index_to_ansi_char_index(
+                                line_text.as_str(),
+                                start.offset,
+                            );
                             let before_cursor = &line_text[..start_index];
                             let after_cursor = &line_text[start_index..];
                             format!(
@@ -1668,6 +1669,8 @@ impl<'a> TextArea<'a> {
                                 highlight.paint(to_plain_text(after_cursor))
                             )
                         } else if line_num == end.row {
+                            let end_index =
+                                plain_char_index_to_ansi_char_index(line_text.as_str(), end.offset);
                             let before_cursor = &line_text[..end_index];
                             let after_cursor = &line_text[end_index..];
                             format!(
