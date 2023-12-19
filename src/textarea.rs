@@ -1628,10 +1628,10 @@ impl<'a> TextArea<'a> {
         use nu_ansi_term::Color;
         use nu_ansi_term::Style;
 
+        use crate::util::ansi_to_plain_text;
         use crate::util::bookend_ansi_escapes;
         use crate::util::get_last_ansi_sequence;
         use crate::util::plain_char_index_to_ansi_char_index;
-        use crate::util::to_plain_text;
 
         let cursor_line = self.cursor().0.clamp(0, self.lines().len());
 
@@ -1655,7 +1655,7 @@ impl<'a> TextArea<'a> {
                 match self.selection_range() {
                     Some((start, end)) => {
                         if start.row < line_num && line_num < end.row {
-                            format!("{}", highlight.paint(to_plain_text(&line_text)))
+                            format!("{}", highlight.paint(ansi_to_plain_text(&line_text)))
                         } else if line_num == start.row {
                             let start_index = plain_char_index_to_ansi_char_index(
                                 line_text.as_str(),
@@ -1666,7 +1666,7 @@ impl<'a> TextArea<'a> {
                             format!(
                                 "{}{}",
                                 before_cursor,
-                                highlight.paint(to_plain_text(after_cursor))
+                                highlight.paint(ansi_to_plain_text(after_cursor))
                             )
                         } else if line_num == end.row {
                             let end_index =
@@ -1675,7 +1675,7 @@ impl<'a> TextArea<'a> {
                             let after_cursor = &line_text[end_index..];
                             format!(
                                 "{}{}{}",
-                                highlight.paint(to_plain_text(before_cursor)),
+                                highlight.paint(ansi_to_plain_text(before_cursor)),
                                 last_escape_code,
                                 after_cursor
                             )

@@ -118,7 +118,7 @@ pub fn as_plain_text(text: &[String]) -> Vec<String> {
 }
 
 #[cfg(feature = "ansi-escapes")]
-pub fn to_plain_text(text: &str) -> String {
+pub fn ansi_to_plain_text(text: &str) -> String {
     let mut plain_text = String::new();
     let mut in_escape_sequence = false;
     for c in text.chars() {
