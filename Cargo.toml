@@ -18,7 +18,7 @@ include = ["/src", "/examples", "/tests", "/README.md", "/LICENSE.txt"]
 resolver = "2"
 
 [features]
-default = ["crossterm", "ansi-escapes"]
+default = ["ratatui", "ansi-escapes"]
 # Features to use ratatui
 ratatui = ["dep:ratatui"]
 crossterm = ["ratatui", "dep:crossterm", "ratatui/crossterm"]
@@ -43,7 +43,8 @@ tracing = "0.1.37"
 arbitrary = { version = "1", features = ["derive"], optional = true }
 crossterm = { package = "crossterm", version = "0.27", optional = true }
 crossterm-025 = { package = "crossterm", version = "0.25", optional = true }
-ratatui = { version = ">=0.23.0, <1", default-features = false, optional = true }
+ratatui = { version = "0.24.0", default-features = false, optional = true }
+# ratatui = { version = ">=0.23.0, <1", default-features = false, optional = true }
 regex = { version = "1", optional = true }
 termion = { version = "2.0", optional = true }
 termwiz = { version = "0.20.0", optional = true }

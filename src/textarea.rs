@@ -1624,6 +1624,9 @@ impl<'a> TextArea<'a> {
     }
 
     #[cfg(feature = "ansi-escapes")]
+    pub fn auto_scroll(&self) {}
+
+    #[cfg(feature = "ansi-escapes")]
     pub(crate) fn as_highlighted<'b>(&'b self, top_row: usize, height: usize) -> Vec<u8> {
         use nu_ansi_term::Color;
         use nu_ansi_term::Style;
@@ -1642,19 +1645,39 @@ impl<'a> TextArea<'a> {
         // if let Some((start, end)) = self.selection_range() {
         //     hl.selection(row, start.row, start.offset, end.row, end.offset);
         // }
+
         let mut last_escape_code = String::new();
         bookend_ansi_escapes(self.lines())
             .into_iter()
+            .enumerate()
             .skip(top_row)
             .take(height)
-            .enumerate()
             .map(|(line_num, line_text)| {
-                if let Some(s) = get_last_ansi_sequence(&line_text) {
+                if let Some(s) = get_last_ansi_sequence(&line_text, None) {
                     last_escape_code = s;
                 };
                 match self.selection_range() {
                     Some((start, end)) => {
-                        if start.row < line_num && line_num < end.row {
+                        if start.row == end.row && start.row == line_num {
+                            let last_escape_code =
+                                get_last_ansi_sequence(&line_text, Some(end.row));
+                            let start_index = plain_char_index_to_ansi_char_index(
+                                line_text.as_str(),
+                                start.offset,
+                            );
+                            let end_index =
+                                plain_char_index_to_ansi_char_index(line_text.as_str(), end.offset);
+                            let before_start_cursor = &line_text[..start_index];
+                            let selection = &line_text[start_index..end_index];
+                            let after_end_cursor = &line_text[end_index..];
+                            format!(
+                                "{}\x1b[0m{}{}{}",
+                                before_start_cursor,
+                                highlight.paint(ansi_to_plain_text(selection)),
+                                last_escape_code.unwrap_or("".into()),
+                                after_end_cursor
+                            )
+                        } else if start.row < line_num && line_num < end.row {
                             format!("{}", highlight.paint(ansi_to_plain_text(&line_text)))
                         } else if line_num == start.row {
                             let start_index = plain_char_index_to_ansi_char_index(
@@ -1664,7 +1687,7 @@ impl<'a> TextArea<'a> {
                             let before_cursor = &line_text[..start_index];
                             let after_cursor = &line_text[start_index..];
                             format!(
-                                "{}{}",
+                                "{}\x1b[0m{}",
                                 before_cursor,
                                 highlight.paint(ansi_to_plain_text(after_cursor))
                             )
@@ -1695,7 +1718,7 @@ impl<'a> TextArea<'a> {
                                 let cursor = &line_text
                                     .chars()
                                     .nth(cursor_index)
-                                    .unwrap_or('&')
+                                    .unwrap_or(' ')
                                     .to_string();
                                 if cursor_index == line_text.len() {
                                     format!("{}{}", before_cursor, reverse.paint(cursor))

@@ -45,7 +45,7 @@ pub fn plain_char_index_to_ansi_char_index(text: &str, index: usize) -> usize {
 }
 
 #[cfg(feature = "ansi-escapes")]
-pub fn get_last_ansi_sequence(text: &str) -> Option<String> {
+pub fn get_last_ansi_sequence(text: &str, index: Option<usize>) -> Option<String> {
     let mut ansi_sequences = Vec::new();
     let mut last_ansi_sequence = String::new();
     let mut in_escape_sequence = false;
@@ -61,6 +61,11 @@ pub fn get_last_ansi_sequence(text: &str) -> Option<String> {
                     ansi_sequences.push(last_ansi_sequence.clone());
                 }
                 last_ansi_sequence.clear();
+            }
+        }
+        if let Some(index) = index {
+            if ansi_sequences.len() == index {
+                break;
             }
         }
     }
