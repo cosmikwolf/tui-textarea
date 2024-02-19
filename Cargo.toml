@@ -103,11 +103,11 @@ required-features = ["tuirs-crossterm", "search"]
 name = "tuirs_termion"
 required-features = ["tuirs-termion"]
 
-[workspace]
-members = ["bench"]
-
-[profile.bench]
-lto = "thin"
+# [workspace]
+# members = ["bench"]
+#
+# [profile.bench]
+# lto = "thin"
 
 [package.metadata.docs.rs]
 targets = ["x86_64-unknown-linux-gnu"]
